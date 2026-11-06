@@ -30,6 +30,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -671,6 +672,61 @@ class EvaluationServiceTest {
         assertThat(peerEvaluations.get(2).getEvaluator().getId()).isEqualTo(5);
         assertThat(peerEvaluations.get(2).getWeek()).isEqualTo("2023-W31");
         assertThat(peerEvaluations.get(2).getTotalScore()).isCloseTo(49.0, within(0.01));
+    }
+
+    private void fixClockAt(LocalDate date) {
+        Clock fixedClock = Clock.fixed(date.atStartOfDay(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+        given(this.clock.instant()).willReturn(fixedClock.instant());
+        given(this.clock.getZone()).willReturn(fixedClock.getZone());
+    }
+
+    @Test
+    void testAddPeerEvaluationOfADeactivatedTeammateIsRefused() {
+        // UC-EVA-submit-evaluation 9a
+        fixClockAt(LocalDate.of(2023, 8, 13)); // Previous week is 2023-W31
+        this.woody.setEnabled(false);
+        PeerEvaluation newPeerEvaluation = new PeerEvaluation("2023-W31", this.amanda, this.woody, List.of(), "public comment", "private comment");
+
+        assertThatThrownBy(() -> this.evaluationService.addPeerEvaluation(newPeerEvaluation))
+                .isInstanceOf(PeerEvaluationIllegalArgumentException.class)
+                .hasMessage("A deactivated team member is not evaluated.");
+        verify(this.evaluationRepository, never()).save(any());
+    }
+
+    @Test
+    void testUpdatePeerEvaluationOfANowDeactivatedTeammateIsRefused() {
+        // UC-EVA-submit-evaluation 9a, re-submit
+        fixClockAt(LocalDate.of(2023, 8, 8)); // Previous week is 2023-W31
+        PeerEvaluation oldPeerEvaluation = new PeerEvaluation("2023-W31", this.john, this.eric, List.of(), "public comment", "private comment");
+        oldPeerEvaluation.setPeerEvaluationId(1);
+        PeerEvaluation update = new PeerEvaluation("2023-W31", this.john, this.eric, List.of(), "new public comment", "new private comment");
+        this.eric.setEnabled(false);
+        given(this.evaluationRepository.findById(1)).willReturn(Optional.of(oldPeerEvaluation));
+
+        assertThatThrownBy(() -> this.evaluationService.updatePeerEvaluation(1, update))
+                .isInstanceOf(PeerEvaluationIllegalArgumentException.class)
+                .hasMessage("A deactivated team member is not evaluated.");
+        assertThat(oldPeerEvaluation.getPublicComment()).isEqualTo("public comment");
+        verify(this.evaluationRepository, never()).save(any());
+    }
+
+    @Test
+    void testSectionReportListsADeactivatedStudentOnlyWhenSheWasEvaluated() {
+        // BR-student-lifecycle listing rule: Eric (deactivated, evaluated) is listed and tagged; Woody (deactivated,
+        // not evaluated) is omitted; Amanda (active, not evaluated) is still listed
+        given(this.sectionRepository.findById(anyInt())).willReturn(Optional.of(new Section("2023-2024", LocalDate.of(2023, 8, 14), LocalDate.of(2024, 4, 29), true, DayOfWeek.MONDAY, LocalTime.of(23, 59), DayOfWeek.TUESDAY, LocalTime.of(23, 59))));
+        given(this.studentRepository.findBySectionSectionId(anyInt())).willReturn(List.of(this.eric, this.woody, this.amanda));
+        this.eric.setEnabled(false);
+        this.woody.setEnabled(false);
+        given(this.evaluationRepository.findByWeekAndEvaluateeId("2023-W31", 4)).willReturn(this.ericsW31Evaluations);
+        given(this.evaluationRepository.findByWeekAndEvaluateeId("2023-W31", 6)).willReturn(List.of());
+        given(this.evaluationRepository.findByWeekAndEvaluateeId("2023-W31", 7)).willReturn(List.of());
+
+        WeeklyPeerEvaluationReport report = this.evaluationService.generateWeeklyPeerEvaluationReportForSection(2, "2023-W31");
+
+        assertThat(report.getPeerEvaluationAverages()).extracting(PeerEvaluationAverage::getStudentId).containsExactly(4, 7);
+        assertThat(report.getPeerEvaluationAverages().get(0).isDeactivated()).isTrue();
+        assertThat(report.getPeerEvaluationAverages().get(1).isDeactivated()).isFalse();
     }
 
 }

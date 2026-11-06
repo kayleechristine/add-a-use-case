@@ -33,6 +33,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @DisplayName("Integration tests for Evaluation API endpoints")
 public class EvaluationIntegrationTest extends AbstractIntegrationTest {
@@ -787,6 +788,68 @@ public class EvaluationIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.flag").value(false))
                 .andExpect(jsonPath("$.code").value(StatusCode.INVALID_ARGUMENT))
                 .andExpect(jsonPath("$.message").value("The ratings are not valid. Please make sure all criteria in the rubric are rated and each criterion is rated only once."));
+    }
+
+    @Autowired
+    team.projectpulse.student.StudentRepository studentRepository;
+
+    @Autowired
+    PeerEvaluationRepository peerEvaluationRepository;
+
+    private void deactivateEric() {
+        team.projectpulse.student.Student eric = this.studentRepository.findById(5).orElseThrow();
+        eric.setEnabled(false);
+        this.studentRepository.saveAndFlush(eric);
+    }
+
+    private List<RatingDto> ratings(Integer firstRatingId) {
+        return List.of(
+                new RatingDto(firstRatingId == null ? null : firstRatingId, 1, 4.0),
+                new RatingDto(firstRatingId == null ? null : firstRatingId + 1, 2, 9.0),
+                new RatingDto(firstRatingId == null ? null : firstRatingId + 2, 3, 7.0),
+                new RatingDto(firstRatingId == null ? null : firstRatingId + 3, 4, 10.0),
+                new RatingDto(firstRatingId == null ? null : firstRatingId + 4, 5, 5.0),
+                new RatingDto(firstRatingId == null ? null : firstRatingId + 5, 6, 6.0));
+    }
+
+    @Test
+    @DisplayName("UC-EVA-submit-evaluation 9a: a deactivated teammate cannot be evaluated")
+    void testStudentJohnCannotEvaluateDeactivatedEric() throws Exception {
+        LocalDate fixedDate = LocalDate.of(2023, 9, 15); // 2023-W37, so 2023-W36 is open
+        Clock fixedClock = Clock.fixed(fixedDate.atStartOfDay(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+        given(this.clock.instant()).willReturn(fixedClock.instant());
+        given(this.clock.getZone()).willReturn(fixedClock.getZone());
+        deactivateEric();
+
+        PeerEvaluationDto peerEvaluationDto = new PeerEvaluationDto(null, "2023-W36", 4, "John Smith", 5, "Eric Hudson", ratings(null), 41.0, "Good job", "Keep it up", null, null);
+
+        this.mockMvc.perform(post(this.baseUrl + "/evaluations").contentType(MediaType.APPLICATION_JSON).content(this.jsonMapper.writeValueAsString(peerEvaluationDto)).header(HttpHeaders.AUTHORIZATION, this.studentJohnToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.flag").value(false))
+                .andExpect(jsonPath("$.code").value(StatusCode.INVALID_ARGUMENT))
+                .andExpect(jsonPath("$.message").value("A deactivated team member is not evaluated."));
+
+        org.assertj.core.api.Assertions.assertThat(this.peerEvaluationRepository.findByWeekAndEvaluatorIdAndEvaluateeId("2023-W36", 4, 5)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("UC-EVA-submit-evaluation 9a: an evaluation of a now-deactivated teammate cannot be re-submitted")
+    void testStudentJohnCannotResubmitHisEvaluationOfDeactivatedEric() throws Exception {
+        LocalDate fixedDate = LocalDate.of(2023, 8, 8); // 2023-W32, so evaluation 1 (2023-W31) is still editable
+        Clock fixedClock = Clock.fixed(fixedDate.atStartOfDay(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
+        given(this.clock.instant()).willReturn(fixedClock.instant());
+        given(this.clock.getZone()).willReturn(fixedClock.getZone());
+        String publicCommentBefore = this.peerEvaluationRepository.findById(1).orElseThrow().getPublicComment();
+        deactivateEric();
+
+        PeerEvaluationDto peerEvaluationDto = new PeerEvaluationDto(1, "2023-W31", 4, "John Smith", 5, "Eric Hudson", ratings(1), 41.0, "Changed", "Changed", null, null);
+
+        this.mockMvc.perform(put(this.baseUrl + "/evaluations/1").contentType(MediaType.APPLICATION_JSON).content(this.jsonMapper.writeValueAsString(peerEvaluationDto)).header(HttpHeaders.AUTHORIZATION, this.studentJohnToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(StatusCode.INVALID_ARGUMENT))
+                .andExpect(jsonPath("$.message").value("A deactivated team member is not evaluated."));
+
+        org.assertj.core.api.Assertions.assertThat(this.peerEvaluationRepository.findById(1).orElseThrow().getPublicComment()).isEqualTo(publicCommentBefore);
     }
 
 }
