@@ -1,13 +1,16 @@
 package team.projectpulse.student;
 
+import team.projectpulse.instructor.Instructor;
+import team.projectpulse.section.Section;
 import team.projectpulse.system.UserUtils;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
 /**
  * Answers the questions a route asks about one named student: is that student the caller herself
- * ({@code isStudentSelf}), and is the caller an instructor of that student's course section
- * ({@code isCurrentUserInstructorOfStudentSection}).
+ * ({@code isStudentSelf}), is the caller an instructor of that student's course section
+ * ({@code isCurrentUserInstructorOfStudentSection}), and may the caller change that student's account lifecycle
+ * ({@code canChangeStudentLifecycle}).
  *
  * <p>Every check fails closed: an id that names no row, or a link not yet established, is denied rather than
  * throwing. These methods run inside an {@code AuthorizationManager}, upstream of the {@code DispatcherServlet},
@@ -45,6 +48,29 @@ public class StudentSecurityService {
         }
         return student.getSection().getInstructors().stream()
                 .anyMatch(instructor -> instructor.getId().equals(instructorIdFromJwt));
+    }
+
+    /**
+     * May the caller deactivate (or reactivate) this student: is she an instructor assigned to the student's course
+     * section, or the course admin of the course that section belongs to (BR-student-lifecycle,
+     * BR-section-scoped-access)? Unlike {@link #isCurrentUserInstructorOfStudentSection}, this admits the course
+     * admin even when she is not assigned to the course section (docs/design/stu.md, D4; the other routes' gap is
+     * OI-65).
+     */
+    public boolean canChangeStudentLifecycle(Integer studentId) {
+        Integer callerId = this.userUtils.getUserId();
+        Student student = this.studentRepository.findById(studentId).orElse(null);
+        if (callerId == null || student == null) {
+            return false;
+        }
+        Section section = student.getSection();
+        boolean assignedInstructor = section.getInstructors().stream()
+                .anyMatch(instructor -> instructor.getId().equals(callerId));
+        if (assignedInstructor) {
+            return true;
+        }
+        Instructor courseAdmin = section.getCourse().getCourseAdmin();
+        return courseAdmin != null && callerId.equals(courseAdmin.getId());
     }
 
 }
