@@ -1474,9 +1474,6 @@ Details:
 7. Use case ends.
 
 **Extensions:**
-- **3a. The instructor is not authorized to deactivate this student** (she is neither assigned to the student's course section nor the course admin of the course it belongs to):
-  - 3a1. The system does not deactivate the student and informs the instructor that she is not permitted to deactivate this student (BR-student-lifecycle, BR-section-scoped-access).
-  - 3a2. Use case ends.
 - **5a. The course admin or instructor declines the confirmation:**
   - 5a1. The system does not deactivate the student, sends no email, and leaves the student's account unchanged.
   - 5a2. Use case ends.
@@ -1486,6 +1483,9 @@ Details:
 - **6b. The notification email cannot be sent:**
   - 6b1. The student remains deactivated. The system informs the course admin or instructor that this student has been deactivated but the notification email could not be sent.
   - 6b2. Use case ends.
+- **6c. The instructor is not authorized to deactivate this student** (she is neither assigned to the student's course section nor the course admin of the course it belongs to; checked when the deactivation is submitted, before 6a):
+  - 6c1. The system does not deactivate the student, sends no email, and informs the instructor that she is not permitted to deactivate this student (BR-student-lifecycle, BR-section-scoped-access).
+  - 6c2. Use case ends.
 
 **Priority:** Low
 **Frequency of Use:** Rare. Occurs occasionally when a student withdraws from a course section.
