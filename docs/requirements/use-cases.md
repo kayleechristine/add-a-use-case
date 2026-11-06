@@ -1462,7 +1462,7 @@ Details:
 
 **Postconditions:**
 - POST-1. The student's account is deactivated.
-- POST-2. The student is notified by email that her account has been deactivated.
+- POST-2. The student is notified by email that her account has been deactivated, or, if that email cannot be sent, the course admin or instructor is told so (extension 6b).
 
 **Main Success Scenario:**
 1. The course admin or instructor indicates to deactivate a student.
@@ -1480,8 +1480,8 @@ Details:
 - **5a. The course admin or instructor declines the confirmation:**
   - 5a1. The system does not deactivate the student, sends no email, and leaves the student's account unchanged.
   - 5a2. Use case ends.
-- **6a. The student is already deactivated** (e.g., another instructor deactivated her after the details were viewed in step 2):
-  - 6a1. The system makes no change, sends no email, and informs the course admin or instructor that this student was already deactivated (e.g., "Jane Doe was already deactivated.").
+- **6a. The student is already deactivated** (another course admin or instructor deactivated her after step 2):
+  - 6a1. The system makes no change, sends no email, and informs the course admin or instructor with the message "<student name> was already deactivated."
   - 6a2. Use case ends.
 - **6b. The notification email cannot be sent:**
   - 6b1. The student remains deactivated. The system informs the course admin or instructor that this student has been deactivated but the notification email could not be sent.
