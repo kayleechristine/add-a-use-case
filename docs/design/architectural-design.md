@@ -302,7 +302,8 @@ sequenceDiagram
     API-->>SPA: Result { token: JWT (RSA-2048, 2h) }
     SPA->>SPA: store token (Pinia), set Bearer header
     SPA->>API: GET /api/v1/... (Bearer JWT)
-    API->>API: verify JWT, then AuthorizationManager (ownership/membership)
+    API->>API: verify JWT signature + expiry, and that the account is still active (FR-SEC-active-account)
+    API->>API: then AuthorizationManager (ownership/membership)
     API-->>SPA: Result { data }
 ```
 
