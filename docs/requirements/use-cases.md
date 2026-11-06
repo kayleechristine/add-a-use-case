@@ -1462,6 +1462,7 @@ Details:
 
 **Postconditions:**
 - POST-1. The student's account is deactivated.
+- POST-2. The student is notified by email that her account has been deactivated.
 
 **Main Success Scenario:**
 1. The course admin or instructor indicates to deactivate a student.
@@ -1469,13 +1470,26 @@ Details:
 3. The course admin or instructor chooses to deactivate this student.
 4. The system alerts the course admin or instructor of the consequences of this deactivation defined in the Associated Information of this use case, warns about the deactivation, and asks for confirmation.
 5. The course admin or instructor confirms the deactivation.
-6. The system deactivates the student and alerts the course admin or instructor that this student has been deactivated.
+6. The system deactivates the student, notifies this student by email that her account has been deactivated, and alerts the course admin or instructor that this student has been deactivated.
 7. Use case ends.
 
 **Extensions:**
+- **3a. The instructor is not authorized to deactivate this student** (she is neither assigned to the student's course section nor the course admin of the course it belongs to):
+  - 3a1. The system does not deactivate the student and informs the instructor that she is not permitted to deactivate this student (BR-student-lifecycle, BR-section-scoped-access).
+  - 3a2. Use case ends.
+- **5a. The course admin or instructor declines the confirmation:**
+  - 5a1. The system does not deactivate the student, sends no email, and leaves the student's account unchanged.
+  - 5a2. Use case ends.
+- **6a. The student is already deactivated** (e.g., another instructor deactivated her after the details were viewed in step 2):
+  - 6a1. The system makes no change, sends no email, and informs the course admin or instructor that this student was already deactivated (e.g., "Jane Doe was already deactivated.").
+  - 6a2. Use case ends.
+- **6b. The notification email cannot be sent:**
+  - 6b1. The student remains deactivated. The system informs the course admin or instructor that this student has been deactivated but the notification email could not be sent.
+  - 6b2. Use case ends.
+
 **Priority:** Low
 **Frequency of Use:** Rare. Occurs occasionally when a student withdraws from a course section.
-**Business Rules:** BR-student-lifecycle
+**Business Rules:** BR-student-lifecycle, BR-section-scoped-access (which course admin or instructor may deactivate the student)
 
 **Associated Information:**
 - Consequence of the deactivation: The student will no longer be able to log in or submit weekly activity reports and peer evaluations, but the student's account and her previously submitted work are kept in the system. Deactivation will NOT remove the student from the system, and the account can be reactivated in the future (UC-STU-reactivate-student: Reactivate a student). This is distinct from deletion (UC-STU-delete-student: Delete a student), which is a physical, unrecoverable delete. The course admin or instructor shall be able to cancel the use case at any time prior to submitting it.
