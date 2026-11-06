@@ -99,10 +99,10 @@ sequenceDiagram
             M-->>V: 403
         else authorized
             API->>S: deactivateStudent(studentId)
-            alt 6a already deactivated
-                S-->>API: alreadyDeactivated (no save, no email)
-            else active
-                S->>S: enabled = false, save (team untouched)
+            S->>S: conditional update enabled true to false (team untouched)
+            alt 6a 0 rows affected, already deactivated
+                S-->>API: alreadyDeactivated (no change, no email)
+            else 1 row affected
                 S->>E: sendDeactivationEmail (step 6)
                 alt 6b mail fails
                     E--xS: MailException caught, emailSent = false
@@ -144,20 +144,21 @@ stateDiagram-v2
 
 | Endpoint or job | Caller (who may) | Request | Success | Errors, by extension |
 |---|---|---|---|---|
-| `PATCH /api/v1/students/{studentId}/deactivation` | an instructor assigned to the student's course section, or the course admin of the course it belongs to | none | `200`. Data: the student, `alreadyDeactivated`, `emailSent`. Message: step 6 "<student name> has been deactivated."; 6a "<student name> was already deactivated."; 6b "<student name> has been deactivated, but the notification email could not be sent." | 3a: `403`, and an id naming no student is also `403` (fail-closed manager); 5a: no request is sent |
+| `PATCH /api/v1/students/{studentId}/deactivation` | an instructor assigned to the student's course section, or the course admin of the course it belongs to | none | `200`, `flag` true, `StatusCode.SUCCESS` for every outcome. Data: `{ student: StudentDto, alreadyDeactivated, emailSent }`. <student name> is first and last name. Message: step 6 "<student name> has been deactivated."; 6a "<student name> was already deactivated."; 6b "<student name> has been deactivated, but the notification email could not be sent." | 3a: `403`, `Result` message "No permission." (the access-denied handler delegates to `ExceptionHandlerAdvice`; the SPA toasts it and routes to the forbidden page). An id naming no student is also `403` (fail-closed manager). 5a: no request is sent |
 | `PUT /api/v1/students/{studentId}` (changed) | unchanged | `enabled: false` for an active student | unchanged otherwise | `400` "Use Deactivate to deactivate a student." (D5) |
-| `POST /api/v1/evaluations` (changed) | unchanged | the evaluatee is deactivated | unchanged | UC-EVA-submit-evaluation 9a: `400` "A deactivated team member is not evaluated." |
-| `GET /api/v1/evaluations/sections/{sectionId}/week/{week}` (changed) | unchanged | unchanged | each row gains `deactivated`; a deactivated student appears only if she received at least one peer evaluation that week | unchanged |
-| any request with a bearer token | — | a JWT whose `userId` names a deactivated account | — | `401` |
+| `POST /api/v1/evaluations` (changed; one evaluatee per request) | unchanged | the evaluatee is deactivated | unchanged | UC-EVA-submit-evaluation 9a: `400`, `StatusCode.INVALID_ARGUMENT`, "A deactivated team member is not evaluated." Checked after the existing 1a/1b/1c window and team checks |
+| `PUT /api/v1/evaluations/{evaluationId}` (changed) | unchanged | re-submitting an evaluation whose evaluatee is now deactivated | unchanged | 9a: the same `400` (re-submitting is submitting, per BR-student-lifecycle) |
+| `GET /api/v1/evaluations/sections/{sectionId}/week/{week}` (changed) | unchanged | unchanged | each row gains `deactivated`; a deactivated student appears only if she received at least one peer evaluation that week, her self-evaluation included. "Deactivated" is her status when the report runs, since no history is stored. Who has not submitted still comes from the notification slice's submission-status endpoint | unchanged |
+| any request with a bearer token | — | a JWT whose `userId` names a deactivated account, or no account | — | `401` "The access token provided is expired, revoked, malformed, or invalid…" (`InvalidBearerTokenException`). The SPA redirects to login, where her login fails with the existing disabled-account message |
 
 ## Key decisions
 
 - **D1: A dedicated `PATCH /students/{studentId}/deactivation`.** Rejected: keeping deactivation as `enabled: false` on `PUT /students/{studentId}`. A generic profile update can't carry the warning, the email, or the 6a no-op, and it hides a lifecycle change inside a field edit.
-- **D2: The session cut-off is a JWT validator that reads `enabled` on each request.** Rejected: a shorter token lifetime, which narrows the window but still leaves one; and a revocation denylist, which adds server state and works against the stateless, multi-instance deployment. Cost: one primary-key read per authenticated request, which is acceptable at about 75 users. The validator fails closed, so a `userId` claim naming no user is refused.
-- **D3: The email is sent inside the service after the save, and a `MailException` is caught** (6b). An SMTP failure therefore never rolls back the deactivation, and the outcome still reaches the instructor in the same response. Rejected: an `AFTER_COMMIT` event listener. It can't report `emailSent` back synchronously, so 6b1 would be unmet. The residual risk, an email sent and then a commit that fails, is accepted as negligible for a single-row update.
-- **D4: Authorization is a new `canChangeStudentLifecycle` check.** It admits the assigned instructor or the course admin of the student's course, per BR-student-lifecycle and BR-section-scoped-access. Rejected: widening the shared `isCurrentUserInstructorOfStudentSection`. That method guards five other routes (student GET/PUT/DELETE, evaluation details, and others) that have the same course-admin gap. Fixing them is a separate access change, tracked as OI-65.
-- **D5: The edit-form status toggle becomes reactivate-only** until UC-STU-reactivate-student is built. `updateStudent` accepts `enabled` false→true and refuses true→false. Rejected: removing the toggle, which strands a returning student; and keeping it, which leaves a second deactivation path with no warning, no email, and none of the extensions.
-- **D6: Deactivated teammates are filtered out of the evaluation form, and 9a is enforced in `addPeerEvaluation`.** Rejected: filtering `GET /students/teams/{teamId}`. Other views (the team roster, WAR reports) correctly show her as an inactive member, because she stays on her team (BR-student-lifecycle).
+- **D2: The session cut-off is a JWT validator that reads `enabled` on each request.** Rejected: a shorter token lifetime, which narrows the window but still leaves one; and a revocation denylist, which adds server state and works against the stateless, multi-instance deployment. Cost: one primary-key read per authenticated request, which is acceptable at about 75 users. The validator fails closed, so a missing, malformed, or unknown `userId` claim is refused. It reads the repository directly, with **no cache**: a cache would reopen the window that FR-SEC-active-account closes.
+- **D3: The state change is a conditional update, and the email follows it synchronously.** `UPDATE … SET enabled = false WHERE id = ? AND enabled = true`, where zero rows affected means 6a. Two concurrent deactivations therefore produce one change and one email; the other caller gets 6a. Rejected: read-then-save, where both callers see `enabled = true` and both send (6a1 broken). The email is sent synchronously (`EmailService` has no `@Async`) inside the service, after the update. Any `RuntimeException` from the send is caught and logged, and sets `emailSent = false` (6b). An SMTP failure therefore never rolls back the deactivation, and the outcome still reaches the instructor in the same response. Rejected: an `AFTER_COMMIT` event listener. It can't report `emailSent` back synchronously, so 6b1 would be unmet. The residual risk, an email sent and then a commit that fails, is accepted as negligible for a single-row update.
+- **D4: Authorization is a new `canChangeStudentLifecycle` check.** It admits the assigned instructor or the course admin of the student's course, per BR-student-lifecycle and BR-section-scoped-access. Rejected: widening the shared `isCurrentUserInstructorOfStudentSection`. That method guards five other routes (student GET/PUT/DELETE, evaluation details, and others) that have the same course-admin gap. Fixing them is a separate access change, tracked as OI-65. The Deactivate row action needs no `GET /students/{studentId}`, so an unassigned course admin can still reach it from the Students list. The Students list shows only the caller's own default course section, so in practice 3a arises only from a stale page or a hand-made request. The server check after step 5 is therefore authoritative. A UI pre-check before step 4 is rejected: it would duplicate the rule in the browser, and 3a1's outcome (no change, and the caller is told) holds either way.
+- **D5: The edit-form status toggle becomes reactivate-only** until UC-STU-reactivate-student is built. `updateStudent` accepts `enabled` false→true and refuses true→false. Rejected: removing the toggle, which strands a returning student; and keeping it, which leaves a second deactivation path with no warning, no email, and none of the extensions. `enabled: false` for an already-deactivated student is a no-op. The interim path keeps the PUT route's guard, so it sends no reactivation email and refuses the unassigned course admin (OI-65). Both gaps are accepted until UC-STU-reactivate-student is built.
+- **D6: Deactivated teammates are filtered out of the evaluation form, and 9a is enforced in both `addPeerEvaluation` and `updatePeerEvaluation`.** Her earlier evaluations stay stored and in the reports, but she no longer appears in the form. Rejected: filtering `GET /students/teams/{teamId}`. Other views (the team roster, WAR reports) correctly show her as an inactive member, because she stays on her team (BR-student-lifecycle).
 
 ## Data model
 
@@ -180,15 +181,23 @@ No schema change. `enabled` already exists on `PeerEvaluationUser` (see the SRS'
 | UC-STU-deactivate-student, main, assigned instructor | integration | `200`, step 6 message; `enabled` false; team unchanged; one email to her address |
 | main, course admin of the course, not assigned to the course section | integration | `200` (D4) |
 | 3a, an instructor not assigned to her course section | integration | `403`; `enabled` unchanged; no email |
-| 3a, a student caller | integration | `403` |
+| 3a, response body | integration | `403` with `Result` message "No permission."; an id naming no student is also `403` |
+| FR-SEC-authorization, a student caller | integration | `403` |
 | 5a, declines at the warning | Cypress, API stubbed | no PATCH request is sent |
 | 6a, already deactivated | unit + integration | `200`, "<student name> was already deactivated."; no save; no email |
-| 6b, the email cannot be sent | unit | `enabled` false is saved; `emailSent` false; 6b message |
+| 6b, the email cannot be sent | unit + integration (`EmailService` spy throws) | `enabled` false is saved; `200` with `emailSent` false and the 6b message |
+| 6a, concurrent double deactivation | repository / unit | the second conditional update affects 0 rows, so the result is 6a and only one email is sent |
 | FR-SEC-active-account, a live JWT after deactivation | integration | her next bearer request is `401`; login is `401` |
-| consequence: reminders and owing | existing | `SubmissionStatusServiceIntegrationTest` (deactivated student owes nothing) |
-| UC-EVA-submit-evaluation 9a | unit + integration | an evaluation of a deactivated teammate is `400`; nothing saved |
+| FR-SEC-active-account, a deactivated instructor's live JWT | integration | `401` (the validator is account-generic) |
+| consequence: reminders and owing | existing | `SubmissionStatusServiceTest` (a deactivated student owes nothing); `SubmissionStatusServiceIntegrationTest.testAnEvaluationOfADeactivatedTeammateIsNotRequired` (teammates don't owe her) |
+| UC-EVA-submit-evaluation 9a, submit | unit + integration | a POST evaluating a deactivated teammate is `400`; nothing saved |
+| UC-EVA-submit-evaluation 9a, re-submit | unit + integration | a PUT of an existing evaluation of a now-deactivated teammate is `400`; the evaluation is unchanged |
+| UC-EVA-submit-evaluation step 2, form | Cypress, API stubbed | a deactivated teammate is not listed |
+| UC-STU-deactivate-student step 3, list | Cypress, API stubbed | Deactivate is shown only for an active student; confirming shows the server's message |
 | UC-EVA-section-evaluation-report listing rule | unit | a deactivated student with ≥1 evaluation is listed with `deactivated` true; one with none is omitted; an active student with none is still listed |
-| D5, the edit-form toggle | integration | false→true succeeds; true→false is `400` |
+| D5, the edit-form toggle | integration | false→true succeeds; true→false is `400`; false→false is a no-op |
+
+Integration tests assert email with a spy on `EmailService` (the `ReminderIntegrationTest` pattern; sends reach the Mailpit container). Fixtures the seed lacks (an unassigned course admin, a deactivated student evaluated in a week) are added to `DataInitializer` or set up in the test.
 
 ## Open questions / risks
 
