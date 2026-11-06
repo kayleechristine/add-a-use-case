@@ -182,7 +182,8 @@ onMounted(async () => {
 async function loadStudents() {
   // On the back end, the page number starts from 0, so subtract 1 here
   const result: FindStudentByTeamIdResponse = await findStudentsByTeamId(teamId.value)
-  students.value = result.data
+  // A deactivated teammate is not evaluated (UC-EVA-submit-evaluation step 2, extension 9a; docs/design/stu.md, D6)
+  students.value = result.data.filter((student) => student.enabled !== false)
 }
 
 // Load criteria information
@@ -204,7 +205,11 @@ async function prepareStartingPeerEvaluations() {
 
   // If the student has already submitted evaluations for the current week, load them
   if (result.data.length > 0) {
-    peerEvalutions.value = result.data
+    // Her earlier evaluation of a since-deactivated teammate stays stored, but it is no longer re-submitted (9a)
+    const activeTeammateIds = new Set(students.value.map((student) => student.id))
+    peerEvalutions.value = result.data.filter((evaluation) =>
+      activeTeammateIds.has(evaluation.evaluateeId)
+    )
     isNewSubmission = false
   } else {
     // If not, create a new set of evaluations

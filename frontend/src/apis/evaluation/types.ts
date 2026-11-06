@@ -48,6 +48,7 @@ export interface PeerEvaluationAverage {
   lastName: string
   email: string
   teamName: string | null // Null for a student who is on no team: she may never have been assigned one, or have been removed from one
+  deactivated: boolean // Her account status when the report runs (BR-student-lifecycle)
   averageTotalScore: number
   publicComments: string[]
   privateComments: string[]
