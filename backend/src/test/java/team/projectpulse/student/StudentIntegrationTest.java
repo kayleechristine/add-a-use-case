@@ -307,4 +307,70 @@ class StudentIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.data").value("Access Denied"));
     }
 
+    @Autowired
+    StudentRepository studentRepository;
+
+    private void setEnabled(int studentId, boolean enabled) {
+        Student student = this.studentRepository.findById(studentId).orElseThrow();
+        student.setEnabled(enabled);
+        this.studentRepository.saveAndFlush(student);
+    }
+
+    private String profileUpdateOfEric(boolean enabled) throws Exception {
+        Map<String, Object> studentDto = new HashMap<>();
+        studentDto.put("username", "e.hudson@abc.edu");
+        studentDto.put("firstName", "Eric");
+        studentDto.put("lastName", "Hudson");
+        studentDto.put("email", "e.hudson@abc.edu");
+        studentDto.put("enabled", enabled);
+        return this.jsonMapper.writeValueAsString(studentDto);
+    }
+
+    @Test
+    void testInstructorBillReactivatesEricThroughTheProfileUpdate() throws Exception {
+        // D5: false -> true succeeds
+        setEnabled(5, false);
+
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(true)).header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
+                .andExpect(jsonPath("$.flag").value(true))
+                .andExpect(jsonPath("$.data.enabled").value(true));
+    }
+
+    @Test
+    void testInstructorBillCannotDeactivateEricThroughTheProfileUpdate() throws Exception {
+        // D5: true -> false is 400
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(false)).header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
+                .andExpect(jsonPath("$.flag").value(false))
+                .andExpect(jsonPath("$.code").value(StatusCode.INVALID_ARGUMENT))
+                .andExpect(jsonPath("$.message").value("Use Deactivate to deactivate a student."));
+
+        org.assertj.core.api.Assertions.assertThat(this.studentRepository.findById(5).orElseThrow().isEnabled()).isTrue();
+    }
+
+    @Test
+    void testInstructorBillSavingADeactivatedEricKeepsHerDeactivated() throws Exception {
+        // D5: false -> false is a no-op
+        setEnabled(5, false);
+
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(false)).header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
+                .andExpect(jsonPath("$.flag").value(true))
+                .andExpect(jsonPath("$.data.enabled").value(false));
+    }
+
+    @Test
+    void testStudentEricSavingOwnProfileWithStatusFalseKeepsHerActive() throws Exception {
+        // D5: a student's own save may carry enabled false; her branch ignores it, so it is neither refused nor applied
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(false)).header(HttpHeaders.AUTHORIZATION, this.studentEricToken))
+                .andExpect(jsonPath("$.flag").value(true))
+                .andExpect(jsonPath("$.data.enabled").value(true));
+    }
+
+    @Test
+    void testASecondConditionalDeactivationChangesNothing() {
+        // 6a, concurrent double deactivation: of two conditional updates only the first changes the row
+        org.assertj.core.api.Assertions.assertThat(this.studentRepository.deactivateIfActive(5)).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(this.studentRepository.deactivateIfActive(5)).isEqualTo(0);
+        org.assertj.core.api.Assertions.assertThat(this.studentRepository.findById(5).orElseThrow().isEnabled()).isFalse();
+    }
+
 }

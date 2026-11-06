@@ -209,7 +209,7 @@ No schema change. `enabled` already exists on `PeerEvaluationUser` (see the SRS'
 | UC-EVA-submit-evaluation step 2, form | Cypress, API stubbed | a deactivated teammate is not listed |
 | UC-STU-deactivate-student step 3, list | Cypress, API stubbed | Deactivate is shown only for an active student; confirming shows the server's message |
 | UC-EVA-section-evaluation-report listing rule | unit | a deactivated student with ≥1 evaluation is listed with `deactivated` true; one with none is omitted; an active student with none is still listed |
-| D5, the edit-form toggle | integration | false→true succeeds; true→false is `400`; false→false is a no-op; a student saving her own profile (`enabled` absent) succeeds and her status is unchanged |
+| D5, the edit-form toggle | integration | false→true succeeds; true→false is `400`; false→false is a no-op; a student saving her own profile with `enabled: false` succeeds and her status is unchanged (a body omitting `enabled` is `400` malformed, since the DTO field is a primitive) |
 
 Integration tests assert email with a spy on `EmailService` (the `ReminderIntegrationTest` pattern; sends reach the Mailpit container). Fixtures the seed lacks (an unassigned course admin, a deactivated student evaluated in a week) are added to `DataInitializer` or set up in the test.
 
