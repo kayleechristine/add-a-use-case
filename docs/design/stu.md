@@ -78,7 +78,7 @@ classDiagram
   - `apis/student` gains `deactivateStudent`, which sends a per-request flag telling [request.ts](../../frontend/src/utils/request.ts) to skip its `403` toast and forbidden-page redirect (D7). This is a shared change.
   - [Students.vue](../../frontend/src/pages/students/Students.vue) gains a Deactivate row action, shown only for an active student. It opens an `ElMessageBox` with the Associated Information consequences (step 4) and shows the server's message as the result.
   - [EditStudentForm.vue](../../frontend/src/pages/students/EditStudentForm.vue) shows the status toggle only for a deactivated student.
-  - [SubmitTeamsEvaluations.vue](../../frontend/src/pages/evaluations/SubmitTeamsEvaluations.vue) lists only `enabled` teammates.
+  - [SubmitTeamsEvaluations.vue](../../frontend/src/pages/evaluations/SubmitTeamsEvaluations.vue) lists only `enabled` teammates. When the student re-opens a week she already submitted, it also drops her earlier evaluation of a since-deactivated teammate, so the re-submission doesn't hit 9a.
   - The section peer evaluation report view tags a `deactivated` row "Deactivated".
 
 ## Sequence
