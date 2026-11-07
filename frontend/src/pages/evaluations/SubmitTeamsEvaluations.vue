@@ -203,13 +203,15 @@ async function prepareStartingPeerEvaluations() {
     previousWeek.value
   )
 
+  // Her earlier evaluation of a since-deactivated teammate stays stored, but it is no longer re-submitted (9a).
+  // Update mode is decided on what is left, so a week whose only stored evaluations are of deactivated teammates
+  // opens as a new submission instead of an empty form.
+  const activeTeammateIds = new Set(students.value.map((student) => student.id))
+  const kept = result.data.filter((evaluation) => activeTeammateIds.has(evaluation.evaluateeId))
+
   // If the student has already submitted evaluations for the current week, load them
-  if (result.data.length > 0) {
-    // Her earlier evaluation of a since-deactivated teammate stays stored, but it is no longer re-submitted (9a)
-    const activeTeammateIds = new Set(students.value.map((student) => student.id))
-    peerEvalutions.value = result.data.filter((evaluation) =>
-      activeTeammateIds.has(evaluation.evaluateeId)
-    )
+  if (kept.length > 0) {
+    peerEvalutions.value = kept
     isNewSubmission = false
   } else {
     // If not, create a new set of evaluations
