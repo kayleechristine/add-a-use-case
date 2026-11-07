@@ -102,3 +102,14 @@ export interface DeleteStudentResponse {
   message: string
   data: null
 }
+
+export interface DeactivateStudentResponse {
+  flag: boolean
+  code: number
+  message: string // Step 6, 6a, or 6b, ready to show
+  data: {
+    student: Student
+    alreadyDeactivated: boolean // 6a
+    emailSent: boolean // false is 6b
+  }
+}

@@ -11,7 +11,7 @@ public record StudentDto(Integer id,
                          String lastName,
                          @NotEmpty(message = "email is required.")
                          String email,
-                         boolean enabled,
+                         Boolean enabled, // Null means leave the status alone (docs/design/stu.md, D5)
                          String roles,
                          Integer sectionId,
                          String sectionName,

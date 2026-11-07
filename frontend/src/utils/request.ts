@@ -5,6 +5,16 @@ import { useTokenStore } from '@/stores/token'
 import { useUserInfoStore } from '@/stores/userInfo'
 import router from '@/router'
 
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /**
+     * Skip the global 403 handling (the toast and the redirect to the forbidden page) for this one request, so the
+     * calling page can show its own refusal message and keep the user where they are (docs/design/stu.md, D7).
+     */
+    skipForbiddenHandling?: boolean
+  }
+}
+
 const devBaseURL = import.meta.env.VITE_SERVER_URL as string | undefined
 // Use the dev server URL in development, and a relative path in production and staging. This allows the frontend to be served from the same domain as the backend in production and staging, while still allowing local development against a separate backend server.
 const baseURL = import.meta.env.DEV ? devBaseURL : '/api/v1'
@@ -106,6 +116,11 @@ requestInstance.interceptors.response.use(
     }
 
     const { status, data } = error.response
+
+    // The caller handles this refusal itself
+    if (status === 403 && error.config?.skipForbiddenHandling) {
+      return Promise.reject(error)
+    }
     const msg = (data && (data.message || data.error)) || `HTTP ${status}: Something went wrong`
 
     // Avoid toasting on 401 (we redirect instead)

@@ -34,6 +34,7 @@ public class EvaluationService {
     private static final String RUBRIC_MISMATCH_MESSAGE = "This evaluation was scored against a different set of criteria and can no longer be updated.";
     private static final String NOT_PREVIOUS_WEEK_MESSAGE = "You can only submit evaluations for the previous week.";
     private static final String WINDOW_CLOSED_MESSAGE = "The submission window for this peer evaluation has closed, so it can no longer be changed.";
+    private static final String DEACTIVATED_EVALUATEE_MESSAGE = "A deactivated team member is not evaluated.";
 
     private final PeerEvaluationRepository evaluationRepository;
     private final StudentRepository studentRepository;
@@ -67,6 +68,9 @@ public class EvaluationService {
             throw new PeerEvaluationIllegalArgumentException("The evaluator and evaluatee must be on the same team.");
         }
 
+        // UC-EVA-submit-evaluation 9a: while a teammate is deactivated she is not evaluated (BR-student-lifecycle)
+        requireActiveEvaluatee(newPeerEvaluation);
+
         // Make sure this is not a duplicate evaluation
         if (this.evaluationRepository.findByWeekAndEvaluatorIdAndEvaluateeId(newPeerEvaluation.getWeek(), newPeerEvaluation.getEvaluator().getId(), newPeerEvaluation.getEvaluatee().getId()).isPresent()) {
             throw new PeerEvaluationIllegalArgumentException("You have already submitted an evaluation for " + newPeerEvaluation.getEvaluatee().getFirstName() + " in this week.");
@@ -81,6 +85,8 @@ public class EvaluationService {
                     // The week is read off the stored evaluation rather than off the update, because the caller
                     // writes the payload and could otherwise name an open week to reopen a closed evaluation.
                     requireOpenSubmissionWindow(oldEvaluation.getEvaluator().getSection(), oldEvaluation.getWeek(), WINDOW_CLOSED_MESSAGE);
+                    // 9a holds for a re-submission too: re-submitting is submitting (BR-student-lifecycle)
+                    requireActiveEvaluatee(oldEvaluation);
                     rescore(oldEvaluation, update.getRatings());
                     oldEvaluation.setPublicComment(update.getPublicComment());
                     oldEvaluation.setPrivateComment(update.getPrivateComment());
@@ -114,6 +120,17 @@ public class EvaluationService {
 
         if (!previousWeek().equals(week)) {
             throw new PeerEvaluationIllegalArgumentException(outOfWindowMessage);
+        }
+    }
+
+    /**
+     * Refuses an evaluation of a deactivated student (UC-EVA-submit-evaluation, extension 9a). Her earlier
+     * evaluations stay stored and reported; she simply is not evaluated while she is deactivated, and her teammates
+     * do not owe an evaluation of her (BR-student-lifecycle, BR-submission-owed).
+     */
+    private void requireActiveEvaluatee(PeerEvaluation evaluation) {
+        if (!evaluation.getEvaluatee().isEnabled()) {
+            throw new PeerEvaluationIllegalArgumentException(DEACTIVATED_EVALUATEE_MESSAGE);
         }
     }
 
@@ -178,6 +195,7 @@ public class EvaluationService {
         peerEvaluationAverage.setFirstName(student.getFirstName());
         peerEvaluationAverage.setLastName(student.getLastName());
         peerEvaluationAverage.setEmail(student.getEmail());
+        peerEvaluationAverage.setDeactivated(!student.isEnabled()); // Her status now: no status history is stored
         // Student.team is optional: a student is enrolled in a course section before she is assigned to a team, and
         // BR-team-assignment-required keeps her from authoring until she is, so the team name is simply absent for
         // her. Dereferencing it here was a 500 on her own results page and on the instructor's performance dashboard
@@ -225,6 +243,11 @@ public class EvaluationService {
 
         // For each student, compute her average total score, collect all public comments and private comments, and compute rating averages for each criterion.
         students.forEach(student -> {
+            // A deactivated student is listed only for a week in which she received at least one peer evaluation, her
+            // self-evaluation included (BR-student-lifecycle). An active student is always listed.
+            if (!student.isEnabled() && this.evaluationRepository.findByWeekAndEvaluateeId(week, student.getId()).isEmpty()) {
+                return;
+            }
             PeerEvaluationAverage peerEvaluationAverage = getPeerEvaluationAverage(week, student);
             report.getPeerEvaluationAverages().add(peerEvaluationAverage);
         });

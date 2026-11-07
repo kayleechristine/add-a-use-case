@@ -1,5 +1,6 @@
 package team.projectpulse.system;
 
+import team.projectpulse.student.Student;
 import team.projectpulse.user.userinvitation.UserInvitation;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
@@ -7,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
 
 @Service
 public class EmailService {
@@ -170,6 +172,46 @@ public class EmailService {
             this.javaMailSender.send(message);
         } catch (MessagingException e) {
             throw new RuntimeException("Failed to send peer evaluation confirmation email", e);
+        }
+    }
+
+    /**
+     * Tells a student her account has been deactivated (UC-STU-deactivate-student, step 6). Throws on failure, so
+     * the caller can tell the course admin or instructor that the email could not be sent (extension 6b).
+     */
+    public void sendDeactivationEmail(Student student) {
+        try {
+            MimeMessage message = this.javaMailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+            helper.setFrom(this.fromEmail);
+            helper.setTo(student.getEmail());
+            helper.setSubject("Your Project Pulse account has been deactivated");
+
+            String studentName = HtmlUtils.htmlEscape(student.getFirstName() + " " + student.getLastName());
+            String htmlContent = "<html>" +
+                    "<head>" +
+                    "<style>" +
+                    "body { font-family: Arial, sans-serif; color: #333; }" +
+                    ".container { width: 80%; margin: 0 auto; padding: 20px; background-color: #f9f9f9; border-radius: 10px; box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1); }" +
+                    "h1 { color: #0056b3; }" +
+                    "p { font-size: 16px; line-height: 1.6; }" +
+                    "</style>" +
+                    "</head>" +
+                    "<body>" +
+                    "<div class='container'>" +
+                    "<h1>Your account has been deactivated</h1>" +
+                    "<p>Hello " + studentName + ",</p>" +
+                    "<p>Your Project Pulse account has been deactivated by your instructor. You can no longer log in or submit weekly activity reports and peer evaluations.</p>" +
+                    "<p>Your account and the work you have already submitted are kept, and your account can be reactivated. If you think this is a mistake, please contact your instructor.</p>" +
+                    "<p>Regards,<br/>Project Pulse Team</p>" +
+                    "</div>" +
+                    "</body>" +
+                    "</html>";
+            helper.setText(htmlContent, true);
+            this.javaMailSender.send(message);
+        } catch (MessagingException e) {
+            throw new RuntimeException("Failed to send deactivation email", e);
         }
     }
 

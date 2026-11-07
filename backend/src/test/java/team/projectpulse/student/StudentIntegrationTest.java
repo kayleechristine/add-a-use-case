@@ -307,4 +307,83 @@ class StudentIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.data").value("Access Denied"));
     }
 
+    @Autowired
+    StudentRepository studentRepository;
+
+    private void setEnabled(int studentId, boolean enabled) {
+        Student student = this.studentRepository.findById(studentId).orElseThrow();
+        student.setEnabled(enabled);
+        this.studentRepository.saveAndFlush(student);
+    }
+
+    private String profileUpdateOfEric(Boolean enabled) throws Exception {
+        Map<String, Object> studentDto = new HashMap<>();
+        studentDto.put("username", "e.hudson@abc.edu");
+        studentDto.put("firstName", "Eric");
+        studentDto.put("lastName", "Hudson");
+        studentDto.put("email", "e.hudson@abc.edu");
+        if (enabled != null) {
+            studentDto.put("enabled", enabled);
+        }
+        return this.jsonMapper.writeValueAsString(studentDto);
+    }
+
+    @Test
+    void testInstructorBillReactivatesEricThroughTheProfileUpdate() throws Exception {
+        // D5: false -> true succeeds
+        setEnabled(5, false);
+
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(true)).header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
+                .andExpect(jsonPath("$.flag").value(true))
+                .andExpect(jsonPath("$.data.enabled").value(true));
+    }
+
+    @Test
+    void testInstructorBillCannotDeactivateEricThroughTheProfileUpdate() throws Exception {
+        // D5: true -> false is 400
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(false)).header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
+                .andExpect(jsonPath("$.flag").value(false))
+                .andExpect(jsonPath("$.code").value(StatusCode.INVALID_ARGUMENT))
+                .andExpect(jsonPath("$.message").value("Use Deactivate to deactivate a student."));
+
+        org.assertj.core.api.Assertions.assertThat(this.studentRepository.findById(5).orElseThrow().isEnabled()).isTrue();
+    }
+
+    @Test
+    void testInstructorBillSavingADeactivatedEricLeavesEricDeactivated() throws Exception {
+        // D5: false -> false is a no-op
+        setEnabled(5, false);
+
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(false)).header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
+                .andExpect(jsonPath("$.flag").value(true))
+                .andExpect(jsonPath("$.data.enabled").value(false));
+    }
+
+    @Test
+    void testInstructorBillSavingAStaleFormDoesNotReactivateEric() throws Exception {
+        // D5, review of #3: the edit form sends no status unless it showed the toggle, so a form opened before Eric
+        // was deactivated cannot undo the deactivation when it is saved
+        setEnabled(5, false);
+
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(null)).header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
+                .andExpect(jsonPath("$.flag").value(true))
+                .andExpect(jsonPath("$.data.enabled").value(false));
+    }
+
+    @Test
+    void testStudentEricSavingOwnProfileWithStatusFalseLeavesEricActive() throws Exception {
+        // D5: a student's own save may carry enabled false; her branch ignores it, so it is neither refused nor applied
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(false)).header(HttpHeaders.AUTHORIZATION, this.studentEricToken))
+                .andExpect(jsonPath("$.flag").value(true))
+                .andExpect(jsonPath("$.data.enabled").value(true));
+    }
+
+    @Test
+    void testASecondConditionalDeactivationChangesNothing() {
+        // 6a, concurrent double deactivation: of two conditional updates only the first changes the row
+        org.assertj.core.api.Assertions.assertThat(this.studentRepository.deactivateIfActive(5)).isEqualTo(1);
+        org.assertj.core.api.Assertions.assertThat(this.studentRepository.deactivateIfActive(5)).isEqualTo(0);
+        org.assertj.core.api.Assertions.assertThat(this.studentRepository.findById(5).orElseThrow().isEnabled()).isFalse();
+    }
+
 }

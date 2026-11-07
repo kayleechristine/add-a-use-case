@@ -3,6 +3,7 @@ package team.projectpulse.student;
 import team.projectpulse.student.converter.StudentDtoToStudentConverter;
 import team.projectpulse.student.converter.StudentRegistrationToStudentConverter;
 import team.projectpulse.student.converter.StudentToStudentDtoConverter;
+import team.projectpulse.student.dto.DeactivationOutcomeDto;
 import team.projectpulse.student.dto.StudentDto;
 import team.projectpulse.student.dto.StudentRegistrationRequest;
 import team.projectpulse.system.Result;
@@ -21,13 +22,15 @@ import java.util.stream.Collectors;
 public class StudentController {
 
     private final StudentService studentService;
+    private final StudentLifecycleService studentLifecycleService;
     private final StudentRegistrationToStudentConverter studentRegistrationToStudentConverter;
     private final StudentToStudentDtoConverter studentToStudentDtoConverter;
     private final StudentDtoToStudentConverter studentDtoToStudentConverter;
 
 
-    public StudentController(StudentService studentService, StudentRegistrationToStudentConverter studentRegistrationToStudentConverter, StudentToStudentDtoConverter studentToStudentDtoConverter, StudentDtoToStudentConverter studentDtoToStudentConverter) {
+    public StudentController(StudentService studentService, StudentLifecycleService studentLifecycleService, StudentRegistrationToStudentConverter studentRegistrationToStudentConverter, StudentToStudentDtoConverter studentToStudentDtoConverter, StudentDtoToStudentConverter studentDtoToStudentConverter) {
         this.studentService = studentService;
+        this.studentLifecycleService = studentLifecycleService;
         this.studentRegistrationToStudentConverter = studentRegistrationToStudentConverter;
         this.studentToStudentDtoConverter = studentToStudentDtoConverter;
         this.studentDtoToStudentConverter = studentDtoToStudentConverter;
@@ -65,9 +68,30 @@ public class StudentController {
     @PutMapping("/{studentId}")
     public Result updateStudent(@PathVariable Integer studentId, @Valid @RequestBody StudentDto studentDto) {
         Student update = this.studentDtoToStudentConverter.convert(studentDto);
-        Student updatedStudent = this.studentService.updateStudent(studentId, update);
+        Student updatedStudent = this.studentService.updateStudent(studentId, update, studentDto.enabled());
         StudentDto updatedStudentDto = this.studentToStudentDtoConverter.convert(updatedStudent);
         return new Result(true, StatusCode.SUCCESS, "Update student successfully", updatedStudentDto);
+    }
+
+    /**
+     * UC-STU-deactivate-student, step 6. Every outcome is a success: deactivated (step 6), already deactivated
+     * (6a), or deactivated without the notification email (6b). Who may call it (6c) is the route rule's job.
+     */
+    @PatchMapping("/{studentId}/deactivation")
+    public Result deactivateStudent(@PathVariable Integer studentId) {
+        DeactivationOutcome outcome = this.studentLifecycleService.deactivateStudent(studentId);
+        Student student = outcome.student();
+        String studentName = student.getFirstName() + " " + student.getLastName();
+        String message;
+        if (outcome.alreadyDeactivated()) {
+            message = studentName + " was already deactivated.";
+        } else if (!outcome.emailSent()) {
+            message = studentName + " has been deactivated, but the notification email could not be sent.";
+        } else {
+            message = studentName + " has been deactivated.";
+        }
+        DeactivationOutcomeDto data = new DeactivationOutcomeDto(this.studentToStudentDtoConverter.convert(student), outcome.alreadyDeactivated(), outcome.emailSent());
+        return new Result(true, StatusCode.SUCCESS, message, data);
     }
 
     @DeleteMapping("/{studentId}")
