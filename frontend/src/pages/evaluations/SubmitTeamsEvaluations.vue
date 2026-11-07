@@ -203,7 +203,7 @@ async function prepareStartingPeerEvaluations() {
     previousWeek.value
   )
 
-  // Her earlier evaluation of a since-deactivated teammate stays stored, but it is no longer re-submitted (9a).
+  // The student's earlier evaluation of a since-deactivated teammate stays stored, but it is no longer re-submitted (9a).
   // Update mode is decided on what is left, so a week whose only stored evaluations are of deactivated teammates
   // opens as a new submission instead of an empty form.
   const activeTeammateIds = new Set(students.value.map((student) => student.id))

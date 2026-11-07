@@ -189,14 +189,14 @@ async function confirmDeactivation(student: Student) {
         h('ul', [
           h(
             'li',
-            'Her account and the work she has already submitted are kept. This is not a deletion, and she can be reactivated later.'
+            'Their account and the work they have already submitted are kept. This is not a deletion, and they can be reactivated later.'
           ),
           h(
             'li',
-            'She stays on her team as an inactive member, and her teammates are no longer asked to evaluate her.'
+            'They stay on their team as an inactive member, and their teammates are no longer asked to evaluate them.'
           ),
-          h('li', 'If she is logged in, she loses access on her next request.'),
-          h('li', 'She will be notified by email.')
+          h('li', 'If they are logged in, they lose access on their next request.'),
+          h('li', 'They will be notified by email.')
         ])
       ]),
       `Deactivate ${name}?`,

@@ -65,7 +65,7 @@ const studentBeingEdited = ref<Student>({
 })
 
 const studentForm = ref<FormInstance>() // Form reference
-const loadedDeactivated = ref<boolean>(false) // Her status when the form opened
+const loadedDeactivated = ref<boolean>(false) // The student's status when the form opened
 
 // Validation rules
 const rules = {

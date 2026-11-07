@@ -9,7 +9,7 @@ declare module 'axios' {
   interface AxiosRequestConfig {
     /**
      * Skip the global 403 handling (the toast and the redirect to the forbidden page) for this one request, so the
-     * calling page can show its own refusal message and keep the user where she is (docs/design/stu.md, D7).
+     * calling page can show its own refusal message and keep the user where they are (docs/design/stu.md, D7).
      */
     skipForbiddenHandling?: boolean
   }
