@@ -24,7 +24,7 @@ public interface StudentRepository extends JpaRepository<Student, Integer>, JpaS
      *
      * @return the number of rows changed: 1 if she was active, 0 if she was already deactivated or does not exist
      */
-    @Modifying(clearAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true) // Flush first, so pending changes in a wider transaction are not discarded
     @Query("UPDATE Student s SET s.enabled = false WHERE s.id = :studentId AND s.enabled = true")
     int deactivateIfActive(@Param("studentId") Integer studentId);
 }
