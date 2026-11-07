@@ -7,7 +7,6 @@ import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
-import team.projectpulse.user.PeerEvaluationUser;
 import team.projectpulse.user.UserRepository;
 
 /**
@@ -41,9 +40,8 @@ public class ActiveAccountJwtValidator implements OAuth2TokenValidator<Jwt> {
         if (userId == null) {
             return OAuth2TokenValidatorResult.failure(INACTIVE_ACCOUNT);
         }
-        boolean active = this.userRepositoryProvider.getObject().findById(userId)
-                .map(PeerEvaluationUser::isEnabled)
-                .orElse(false);
+        // An existence check, not findById: loading the user would pull in her eager associations on every request
+        boolean active = this.userRepositoryProvider.getObject().existsByIdAndEnabledTrue(userId);
         return active ? OAuth2TokenValidatorResult.success() : OAuth2TokenValidatorResult.failure(INACTIVE_ACCOUNT);
     }
 

@@ -8,11 +8,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.security.oauth2.jwt.Jwt;
-import team.projectpulse.student.Student;
 import team.projectpulse.user.UserRepository;
 
 import java.time.Instant;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -50,14 +48,10 @@ class ActiveAccountJwtValidatorTest {
         return builder.build();
     }
 
-    private static Student student(boolean enabled) {
-        return new Student("j.smith@abc.edu", "John", "Smith", "j.smith@abc.edu", "123456", enabled, "student");
-    }
-
     @Test
     void anActiveAccountIsAdmitted() {
         given(this.userRepositoryProvider.getObject()).willReturn(this.userRepository);
-        given(this.userRepository.findById(1)).willReturn(Optional.of(student(true)));
+        given(this.userRepository.existsByIdAndEnabledTrue(1)).willReturn(true);
 
         assertThat(this.validator.validate(tokenWithUserId(1L)).hasErrors()).isFalse();
     }
@@ -65,7 +59,7 @@ class ActiveAccountJwtValidatorTest {
     @Test
     void aDeactivatedAccountIsRefused() {
         given(this.userRepositoryProvider.getObject()).willReturn(this.userRepository);
-        given(this.userRepository.findById(1)).willReturn(Optional.of(student(false)));
+        given(this.userRepository.existsByIdAndEnabledTrue(1)).willReturn(false); // Deactivated
 
         assertThat(this.validator.validate(tokenWithUserId(1L)).hasErrors()).isTrue();
     }
@@ -73,7 +67,7 @@ class ActiveAccountJwtValidatorTest {
     @Test
     void anIdNamingNoAccountIsRefused() {
         given(this.userRepositoryProvider.getObject()).willReturn(this.userRepository);
-        given(this.userRepository.findById(999999)).willReturn(Optional.empty());
+        given(this.userRepository.existsByIdAndEnabledTrue(999999)).willReturn(false); // No such account
 
         assertThat(this.validator.validate(tokenWithUserId(999999)).hasErrors()).isTrue();
     }
