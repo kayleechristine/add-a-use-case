@@ -78,7 +78,7 @@ describe('Deactivate a student', () => {
     cy.get('.el-message').should('contain', 'John Smith has been deactivated.')
   })
 
-  it('keeps the instructor on the list when she is not permitted (6c)', () => {
+  it('keeps the instructor on the list when they are not permitted (6c)', () => {
     cy.intercept('PATCH', '**/students/4/deactivation', {
       statusCode: 403,
       body: { flag: false, code: 403, message: 'No permission.', data: null }

@@ -105,7 +105,7 @@ class StudentDeactivationIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void theCourseAdminDeactivatesJohnWithoutBeingAssignedToHisCourseSection() throws Exception {
+    void theCourseAdminDeactivatesJohnWithoutBeingAssignedToJohnsCourseSection() throws Exception {
         // D4: Bingyang owns the course; unassign her from course section 2 first
         Section section = this.sectionRepository.findById(2).orElseThrow();
         section.getInstructors().removeIf(instructor -> instructor.getId() == 1);

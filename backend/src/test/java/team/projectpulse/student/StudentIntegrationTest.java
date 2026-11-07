@@ -350,7 +350,7 @@ class StudentIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void testInstructorBillSavingADeactivatedEricKeepsHerDeactivated() throws Exception {
+    void testInstructorBillSavingADeactivatedEricLeavesEricDeactivated() throws Exception {
         // D5: false -> false is a no-op
         setEnabled(5, false);
 
@@ -371,7 +371,7 @@ class StudentIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
-    void testStudentEricSavingOwnProfileWithStatusFalseKeepsHerActive() throws Exception {
+    void testStudentEricSavingOwnProfileWithStatusFalseLeavesEricActive() throws Exception {
         // D5: a student's own save may carry enabled false; her branch ignores it, so it is neither refused nor applied
         this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(false)).header(HttpHeaders.AUTHORIZATION, this.studentEricToken))
                 .andExpect(jsonPath("$.flag").value(true))

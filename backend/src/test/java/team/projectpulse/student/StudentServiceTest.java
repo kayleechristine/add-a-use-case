@@ -198,7 +198,7 @@ class StudentServiceTest {
     }
 
     @Test
-    void testInstructorSavingADeactivatedStudentKeepsHerDeactivated() {
+    void testInstructorSavingADeactivatedStudentLeavesTheStudentDeactivated() {
         // D5: false -> false is a no-op
         Student deactivated = this.students.get(0);
         deactivated.setEnabled(false);

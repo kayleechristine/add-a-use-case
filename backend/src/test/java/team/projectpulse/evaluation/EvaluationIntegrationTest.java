@@ -834,7 +834,7 @@ public class EvaluationIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     @DisplayName("UC-EVA-submit-evaluation 9a: an evaluation of a now-deactivated teammate cannot be re-submitted")
-    void testStudentJohnCannotResubmitHisEvaluationOfDeactivatedEric() throws Exception {
+    void testStudentJohnCannotResubmitAnEvaluationOfDeactivatedEric() throws Exception {
         LocalDate fixedDate = LocalDate.of(2023, 8, 8); // 2023-W32, so evaluation 1 (2023-W31) is still editable
         Clock fixedClock = Clock.fixed(fixedDate.atStartOfDay(ZoneId.systemDefault()).toInstant(), ZoneId.systemDefault());
         given(this.clock.instant()).willReturn(fixedClock.instant());
