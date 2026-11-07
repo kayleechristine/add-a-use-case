@@ -140,7 +140,7 @@ class StudentServiceTest {
         SecurityContextHolder.setContext(securityContext);
 
         // When
-        Student result = this.studentService.updateStudent(1, update);
+        Student result = this.studentService.updateStudent(1, update, false);
 
         // Then
         assertThat(result.getUsername()).isEqualTo(update.getUsername());
@@ -171,7 +171,7 @@ class StudentServiceTest {
         signInAs("instructor");
 
         // When
-        Student result = this.studentService.updateStudent(1, update);
+        Student result = this.studentService.updateStudent(1, update, true);
 
         // Then
         assertThat(result.getUsername()).isEqualTo(update.getUsername());
@@ -189,7 +189,7 @@ class StudentServiceTest {
         given(this.studentRepository.findById(1)).willReturn(Optional.of(active));
         signInAs("instructor");
 
-        assertThatThrownBy(() -> this.studentService.updateStudent(1, update))
+        assertThatThrownBy(() -> this.studentService.updateStudent(1, update, false))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("Use Deactivate to deactivate a student.");
         assertThat(active.isEnabled()).isTrue();
@@ -207,7 +207,23 @@ class StudentServiceTest {
         given(this.studentRepository.save(any(Student.class))).willReturn(deactivated);
         signInAs("instructor");
 
-        assertThat(this.studentService.updateStudent(1, update).isEnabled()).isFalse();
+        assertThat(this.studentService.updateStudent(1, update, false).isEnabled()).isFalse();
+    }
+
+    @Test
+    void testInstructorSavingWithoutAStatusLeavesItAlone() {
+        // D5, review of #3: a form opened while she was active, saved after she was deactivated, sends no status
+        Student deactivated = this.students.get(0);
+        deactivated.setEnabled(false);
+        Student update = new Student("john", "John (typo fixed)", "Smith", "j.smith@abc.edu", "", true, "student");
+        given(this.studentRepository.findById(1)).willReturn(Optional.of(deactivated));
+        given(this.studentRepository.save(any(Student.class))).willReturn(deactivated);
+        signInAs("instructor");
+
+        Student result = this.studentService.updateStudent(1, update, null);
+
+        assertThat(result.isEnabled()).isFalse();
+        assertThat(result.getFirstName()).isEqualTo("John (typo fixed)");
     }
 
     @Test

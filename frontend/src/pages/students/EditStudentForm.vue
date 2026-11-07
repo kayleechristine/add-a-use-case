@@ -114,7 +114,9 @@ async function updateExistingStudent() {
   const updatedStudent: Student = {
     id: studentBeingEdited.value.id,
     username: studentBeingEdited.value.username,
-    enabled: studentBeingEdited.value.enabled,
+    // The status is sent only when the form showed it: otherwise a form opened before the student was deactivated
+    // would undo the deactivation when saved (docs/design/stu.md, D5)
+    ...(loadedDeactivated.value ? { enabled: studentBeingEdited.value.enabled } : {}),
     firstName: studentBeingEdited.value.firstName,
     lastName: studentBeingEdited.value.lastName,
     email: studentBeingEdited.value.email

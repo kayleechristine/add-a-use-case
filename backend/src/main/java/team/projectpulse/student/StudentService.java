@@ -104,18 +104,24 @@ public class StudentService {
         return savedStudent;
     }
 
-    public Student updateStudent(Integer studentId, Student update) {
+    /**
+     * Updates a student's profile and, for an instructor caller, her status.
+     *
+     * @param requestedEnabled the status an instructor asks for, or {@code null} to leave it alone. The status field
+     *                         is reactivate-only (docs/design/stu.md, D5): deactivation has its own endpoint, which
+     *                         carries the warning, the email and the extensions. A form that did not show the status
+     *                         sends null, so an edit form opened before a deactivation cannot silently undo it.
+     */
+    public Student updateStudent(Integer studentId, Student update, Boolean requestedEnabled) {
         Student oldStudent = this.studentRepository.findById(studentId)
                 .orElseThrow(() -> new ObjectNotFoundException("student", studentId));
 
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         boolean callerIsInstructor = authentication.getAuthorities().stream().anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_instructor"));
+        // A student's own status request is ignored, whatever it says
+        Boolean statusChange = callerIsInstructor ? requestedEnabled : null;
 
-        // The status field is reactivate-only (docs/design/stu.md, D5): deactivation has its own endpoint, which
-        // carries the warning, the email and the extensions. The check sits inside the instructor branch because a
-        // student's own profile save always arrives with enabled false (StudentDto.enabled is a primitive) and is
-        // ignored below; checking it for every caller would refuse every student self-edit.
-        if (callerIsInstructor && oldStudent.isEnabled() && !update.isEnabled()) {
+        if (statusChange != null && oldStudent.isEnabled() && !statusChange) {
             throw new IllegalArgumentException("Use Deactivate to deactivate a student.");
         }
 
@@ -125,10 +131,8 @@ public class StudentService {
         oldStudent.setLastName(update.getLastName());
         oldStudent.setEmail(update.getEmail());
 
-        // If the user is an admin, then the user can update all the fields
-        if (callerIsInstructor) {
-            oldStudent.setEnabled(update.isEnabled()); // Only false -> true (reactivate) or no change reaches here
-//            oldStudent.setRoles(update.getRoles());
+        if (statusChange != null) {
+            oldStudent.setEnabled(statusChange); // Only false -> true (reactivate) or no change reaches here
         }
 
         return this.studentRepository.save(oldStudent);

@@ -316,13 +316,15 @@ class StudentIntegrationTest extends AbstractIntegrationTest {
         this.studentRepository.saveAndFlush(student);
     }
 
-    private String profileUpdateOfEric(boolean enabled) throws Exception {
+    private String profileUpdateOfEric(Boolean enabled) throws Exception {
         Map<String, Object> studentDto = new HashMap<>();
         studentDto.put("username", "e.hudson@abc.edu");
         studentDto.put("firstName", "Eric");
         studentDto.put("lastName", "Hudson");
         studentDto.put("email", "e.hudson@abc.edu");
-        studentDto.put("enabled", enabled);
+        if (enabled != null) {
+            studentDto.put("enabled", enabled);
+        }
         return this.jsonMapper.writeValueAsString(studentDto);
     }
 
@@ -353,6 +355,17 @@ class StudentIntegrationTest extends AbstractIntegrationTest {
         setEnabled(5, false);
 
         this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(false)).header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
+                .andExpect(jsonPath("$.flag").value(true))
+                .andExpect(jsonPath("$.data.enabled").value(false));
+    }
+
+    @Test
+    void testInstructorBillSavingAStaleFormDoesNotReactivateEric() throws Exception {
+        // D5, review of #3: the edit form sends no status unless it showed the toggle, so a form opened before Eric
+        // was deactivated cannot undo the deactivation when it is saved
+        setEnabled(5, false);
+
+        this.mockMvc.perform(put(this.baseUrl + "/students/5").contentType(MediaType.APPLICATION_JSON).content(profileUpdateOfEric(null)).header(HttpHeaders.AUTHORIZATION, this.instructorBillToken))
                 .andExpect(jsonPath("$.flag").value(true))
                 .andExpect(jsonPath("$.data.enabled").value(false));
     }
